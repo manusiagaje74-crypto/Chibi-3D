@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Model 3D Chibi</title>
+<style>
+:root{--bg:#eceef5;--fg:#23242e;--btn:#ffffffcc;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15161d;--fg:#e8e8f0;--btn:#2a2b36cc}}
+:root[data-theme="dark"]{--bg:#15161d;--fg:#e8e8f0;--btn:#2a2b36cc}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif;position:relative;overflow:hidden;touch-action:none}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab}
+.ui{position:absolute;left:0;right:0;text-align:center;pointer-events:none}
+.top{top:14px;font-size:14px;opacity:.7}
+.bot{bottom:18px;display:flex;gap:10px;justify-content:center;pointer-events:auto}
+button{background:var(--btn);color:var(--fg);border:0;border-radius:999px;padding:10px 18px;font-size:14px;cursor:pointer}
+.panel{position:absolute;left:8px;right:8px;bottom:8px;max-width:480px;margin:0 auto;background:var(--btn);border-radius:16px;padding:10px 12px;backdrop-filter:blur(8px);font-size:13px}
+.panel select{width:100%;padding:6px;border-radius:8px;font-size:14px}
+label{display:flex;align-items:center;gap:8px;margin:6px 0}label span{flex:0 0 42%}label input{flex:1}
+.row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:6px}.row button{padding:7px 12px;font-size:13px;background:var(--bg)}
+</style></head><body>
+<canvas id="c"></canvas>
+<div class="ui top">Sentuh bagian tubuh lalu seret · seret latar untuk memutar kamera</div>
+<div class="panel"><select id="jsel"></select><div id="sl"></div>
+<div class="row"><button data-p="Netral">Netral</button><button data-p="Lambai">Lambai</button><button data-p="Genggam">Genggam</button><button data-p="T-pose">T-pose</button><button data-p="Melangkah">Melangkah</button><button id="shoe">Sepatu: lepas</button><button id="reset">Kamera</button></div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const cv=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+const scene=new THREE.Scene();
+const cam=new THREE.PerspectiveCamera(32,1,.1,100);
+let dist=10.5;
+scene.add(new THREE.AmbientLight(0xffffff,.8));
+const dl=new THREE.DirectionalLight(0xffffff,.7);dl.position.set(3,5,6);scene.add(dl);
+
+const gm=new THREE.DataTexture(new Uint8Array([120,190,255]),3,1,THREE.LuminanceFormat);
+gm.minFilter=gm.magFilter=THREE.NearestFilter;gm.needsUpdate=true;
+const outM=new THREE.MeshBasicMaterial({color:0x0a0a10,side:THREE.BackSide});
+const toon=(c,map,side)=>new THREE.MeshToonMaterial({color:c,map:map||null,gradientMap:gm,side:side||THREE.FrontSide});
+const root=new THREE.Group();scene.add(root);
+function part(geo,col,o={}){
+  const m=new THREE.Mesh(geo,o.mat||toon(col,o.map));
+  m.position.set(...(o.p||[0,0,0]));m.scale.set(...(o.s||[1,1,1]));m.rotation.set(...(o.r||[0,0,0]));
+  if(o.o!==0){const ol=new THREE.Mesh(geo,outM);ol.scale.setScalar(o.o||1.05);m.add(ol);}
+  (o.parent||root).add(m);return m;
+}
+const SKIN=0xf6d9cc,HAIR=0x0c0b12;
+
+// ---------- tekstur wajah (meniru gambar) ----------
+function faceTex(){
+  const c=document.createElement('canvas');c.width=c.height=512;const g=c.getContext('2d');
+  g.fillStyle='#f6d9cc';g.fillRect(0,0,512,512);
+  g.fillStyle='rgba(235,140,140,.3)';
+  [[120,350],[392,350]].forEach(([x,y])=>{g.beginPath();g.ellipse(x,y,30,14,0,0,7);g.fill();});
+  function eye(cx,cy){
+    g.save();g.beginPath();g.ellipse(cx,cy,42,23,0,0,7);g.clip();
+    g.fillStyle='#f4e8e8';g.fillRect(cx-45,cy-25,90,50);
+    g.fillStyle='#9c2a45';g.beginPath();g.ellipse(cx,cy+2,25,24,0,0,7);g.fill();
+    g.fillStyle='#d9677a';g.beginPath();g.ellipse(cx,cy+10,18,10,0,0,7);g.fill();
+    g.fillStyle='#2a0a14';g.beginPath();g.ellipse(cx,cy+1,10,15,0,0,7);g.fill();
+    g.fillStyle='#fff';g.beginPath();g.arc(cx-8,cy-6,5,0,7);g.fill();
+    g.fillStyle='#f6d9cc';g.fillRect(cx-45,cy-26,90,19);   // kelopak setengah tertutup
+    g.restore();
+    g.strokeStyle='#1a0c10';g.lineWidth=7;g.lineCap='round';
+    g.beginPath();g.moveTo(cx-44,cy-6);g.quadraticCurveTo(cx,cy-14,cx+44,cy-6);g.stroke();
+    g.strokeStyle='#cf9a9a';g.lineWidth=2.5;
+    g.beginPath();g.moveTo(cx-34,cy+20);g.quadraticCurveTo(cx,cy+26,cx+34,cy+20);g.stroke();
+  }
+  eye(150,288);eye(362,288);
+  g.fillStyle='#e6a09e';g.beginPath();g.ellipse(256,346,6,4,0,0,7);g.fill();   // hidung
+  g.strokeStyle='#b0605f';g.lineWidth=4;g.lineCap='round';                    // mulut datar
+  g.beginPath();g.moveTo(232,392);g.quadraticCurveTo(256,396,280,392);g.stroke();
+  // poni rambut
+  const P=[[512,0],[512,330],[480,240],[450,285],[420,215],[392,255],[364,200],[330,250],[300,215],[256,265],[215,215],[185,255],[148,200],[110,300],[75,225],[40,285],[0,215],[0,0]];
+  g.fillStyle='#0b0a10';g.beginPath();g.moveTo(...P[0]);P.slice(1).forEach(p=>g.lineTo(...p));g.fill();
+  g.strokeStyle='#3b3563';g.lineWidth=5;
+  [[70,120,100,230],[300,110,320,205],[430,130,445,260],[200,100,210,200]].forEach(([a,b,c2,d])=>{g.beginPath();g.moveTo(a,b);g.quadraticCurveTo(a+8,(b+d)/2,c2,d);g.stroke();});
+  return new THREE.CanvasTexture(c);
+}
+// ---------- tekstur syal hati ----------
+function scarfTex(){
+  const c=document.createElement('canvas');c.width=256;c.height=128;const g=c.getContext('2d');
+  g.fillStyle='#0d0d12';g.fillRect(0,0,256,128);g.fillStyle='#46426a';
+  const h=(x,y,s)=>{g.beginPath();g.moveTo(x,y+s*.35);g.bezierCurveTo(x-s,y-s*.3,x-s*.5,y-s*.9,x,y-s*.4);g.bezierCurveTo(x+s*.5,y-s*.9,x+s,y-s*.3,x,y+s*.35);g.fill();};
+  for(let r=0;r<2;r++)for(let i=0;i<4;i++)h(32+i*64+(r?32:0),34+r*64,13);
+  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(3,1);return t;
+}
+
+// ---------- konfigurasi sendi ----------
+const R=Math.PI/180,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const A=(k,l,a,b,m=1,d=1)=>({k,l,a,b,m,d});
+const J={
+ neck:{n:'Kepala',ax:[A('x','Tunduk / dongak',-40,40,1,-1),A('y','Menoleh',-80,80),A('z','Miring',-30,30)]},
+ waist:{n:'Pinggang',ax:[A('x','Membungkuk',-30,60,1,-1),A('y','Memutar',-60,60),A('z','Condong',-25,25)]}};
+const SIDES=[['L',1,'kiri'],['R',-1,'kanan']];  // L di x+ (kiri karakter), R di x-
+SIDES.forEach(([n,s,N])=>{
+ J['shoulder'+n]={n:'Bahu '+N,s,ax:[A('x','Angkat ke depan',-60,180,-1),A('z','Angkat ke samping',-20,180,s)]};
+ J['elbow'+n]={n:'Siku '+N,s,ax:[A('x','Tekuk',0,145,-1)]};
+ J['hip'+n]={n:'Paha '+N,s,ax:[A('x','Angkat ke depan',-45,100,-1),A('z','Buka ke samping',-10,60,s)]};
+ J['knee'+n]={n:'Lutut '+N,s,ax:[A('x','Tekuk',0,140)]};
+ J['wrist'+n]={n:'Pergelangan tangan '+N,s,ax:[A('x','Tekuk depan/belakang',-60,60,-1),A('z','Miring',-30,30,s)]};
+ J['fingers'+n]={n:'Jari tangan '+N,s,ph:[],tips:[],ax:[A('x','Genggam (tekuk jari)',0,90)]};
+ J['ankle'+n]={n:'Pergelangan kaki '+N,s,toes:[],ax:[A('x','Jinjit (+) / angkat ujung (-)',-30,50)]};});
+const DEF=k=>({x:k.startsWith('fingers')?12:0,y:0,z:0}),shoes=[];
+const vals={};Object.keys(J).forEach(k=>vals[k]=DEF(k));
+const G=(parent,p,joint)=>{const g=new THREE.Group();g.position.set(...p);if(joint){g.userData.joint=joint;J[joint].g=g;}parent.add(g);return g;};
+// ---------- rangka ----------
+const waist=G(root,[0,1.15,0],'waist');
+const neck=G(waist,[0,1.15,0],'neck');
+const head=G(neck,[0,.65,0]);head.scale.set(.74,.68,.7);
+part(new THREE.SphereGeometry(1,48,32),SKIN,{parent:head,o:1.03});
+part(new THREE.SphereGeometry(1.015,48,32,Math.PI/2-.7,1.4,1.0,1.7),0xffffff,{parent:head,map:faceTex(),o:0});
+part(new THREE.SphereGeometry(1.045,48,32,0,Math.PI*2,0,1.5),HAIR,{parent:head,o:0,mat:toon(HAIR,null,THREE.DoubleSide)});
+part(new THREE.SphereGeometry(1.045,48,32,Math.PI/2+.7,Math.PI*2-1.4,0,2.15),HAIR,{parent:head,o:0,mat:toon(HAIR,null,THREE.DoubleSide)});
+const dirOf=(t,p)=>new THREE.Vector3(-Math.cos(p)*Math.sin(t),Math.cos(t),Math.sin(p)*Math.sin(t));
+[[.15,0,.6,.22],[.5,.8,.55,.2],[.5,2.4,.5,.2],[.55,4,.55,.22],[.5,5.3,.5,.2],[.55,1.57,.5,.2],
+ [1,3.5,.55,.22],[1.3,4.2,.5,.2],[1.5,5,.5,.2],[1.6,2.6,.5,.2],[1.7,.1,.45,.18],[1.7,3.04,.45,.18]].forEach(([t,p,l,r])=>{
+  const d=dirOf(t,p),m=part(new THREE.ConeGeometry(r,l,8),HAIR,{parent:head,o:0,p:d.clone().multiplyScalar(1+l*.3).toArray()});
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d);
+});
+// helai putih di sisi kiri
+const pts=[[-.45,.85,.5],[-.75,.5,.6],[-.85,.1,.5],[-.8,-.25,.45]].map(a=>new THREE.Vector3(...a).normalize().multiplyScalar(1.07));
+part(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),24,.045,8),0xe9e6ee,{parent:head,o:0});
+
+// ---------- badan ----------
+const cyl=(a,b,h,n=14)=>new THREE.CylinderGeometry(a,b,h,n),sph=(r)=>new THREE.SphereGeometry(r,14,10);
+part(new THREE.CylinderGeometry(.55,.62,1.2,24),0x0c1210,{parent:waist,p:[0,.55,0],s:[1,1,.8]});
+part(new THREE.BoxGeometry(.4,.8,.1),0x1b2a7a,{parent:waist,p:[0,.63,.46],o:0});
+part(new THREE.BoxGeometry(.55,.1,.4),0x555560,{parent:waist,p:[0,0,0],o:0});
+const sc=scarfTex();
+part(new THREE.TorusGeometry(.58,.25,16,40),0xffffff,{parent:waist,p:[0,1.15,.02],r:[Math.PI/2,0,0],s:[1,1,.8],map:sc,o:1.04});
+part(new THREE.TorusGeometry(.6,.2,16,40),0xffffff,{parent:waist,p:[0,.95,.08],r:[Math.PI/2+.12,0,0],s:[1,1,.7],map:sc,o:1.04});
+// rantai ruas jari: tiap ruas berputar di sendinya (sumbu z), melengkung ke arah telapak
+function chain(par,pos,lens,r,rot,f,J_,tag){
+  const base=G(par,pos);base.rotation.set(...rot);let p=base;
+  lens.forEach((L,i)=>{const rr=r*(1-.13*i),g=G(p,[0,i?-lens[i-1]:0,0]);
+    part(cyl(rr*.9,rr*.78,L,8),SKIN,{parent:g,p:[0,-L/2,0],o:1.1});
+    part(sph(rr*.95),SKIN,{parent:g,o:1.1});
+    if(i===lens.length-1)part(sph(rr*.8),SKIN,{parent:g,p:[0,-L,0],o:1.1});
+    J_.ph.push({g,f:f[i]});p=g;});
+  J_.tips.push(p);return base;}
+SIDES.forEach(([n,s])=>{
+ part(new THREE.BoxGeometry(.2,.75,.1),0x1f4a3a,{parent:waist,p:[s*.4,.35,.43],r:[0,s*-.25,0],o:0});
+ // ----- lengan -----
+ const sh=G(waist,[s*.74,1.0,0],'shoulder'+n);
+ part(sph(.16),0x0c1210,{parent:sh,o:1.05});
+ part(cyl(.16,.135,.5),0x0c1210,{parent:sh,p:[0,-.25,0]});
+ const el=G(sh,[0,-.5,0],'elbow'+n);
+ part(sph(.135),0x0c1210,{parent:el,o:1.05});
+ part(cyl(.135,.105,.4),0x0c1210,{parent:el,p:[0,-.2,0]});
+ part(cyl(.12,.12,.15),0x3a3556,{parent:el,p:[0,-.4,0],o:1.06});
+ // ----- tangan: telapak + 4 jari + ibu jari -----
+ const wr=G(el,[0,-.5,0],'wrist'+n);
+ part(cyl(.07,.075,.08),SKIN,{parent:wr,p:[0,-.01,0],o:1.08});
+ part(sph(1),SKIN,{parent:wr,p:[0,-.1,0],s:[.105,.1,.05],o:1.06});
+ const fa=G(wr,[0,-.17,0],'fingers'+n),F=J['fingers'+n];F.g=fa;
+ [[.065,.15],[.022,.17],[-.022,.155],[-.062,.12]].forEach(([x,L],i)=>{
+   chain(fa,[s*x,0,0],[L*.45,L*.3,L*.25],.03,[0,0,0],[1,1.15,.8],F);});
+ chain(fa,[-s*.085,.1,.045],[.09,.075],.038,[-.7,0,s*.2],[.8,1],F);   // ibu jari
+ // ----- kaki -----
+ const hp=G(root,[s*.26,1.15,0],'hip'+n);
+ part(sph(.24),0x2a2a31,{parent:hp,o:1.04});
+ part(cyl(.24,.2,.55,18),0x2a2a31,{parent:hp,p:[0,-.27,0]});
+ const kn=G(hp,[0,-.52,0],'knee'+n);
+ part(sph(.2),0x2a2a31,{parent:kn,o:1.04});
+ part(cyl(.2,.14,.5,18),0x2a2a31,{parent:kn,p:[0,-.22,0]});
+ const an=G(kn,[0,-.43,0],'ankle'+n),T=J['ankle'+n].toes;
+ part(sph(.1),SKIN,{parent:an,p:[0,-.02,0],o:1.06});                        // pergelangan
+ part(sph(1),SKIN,{parent:an,p:[0,-.09,.1],s:[.15,.09,.27],o:1.05});        // telapak/punggung kaki
+ part(sph(1),SKIN,{parent:an,p:[0,-.08,-.1],s:[.12,.1,.12],o:1.05});        // tumit
+ [[-.1,.065,.11],[-.05,.048,.085],[0,.043,.08],[.047,.04,.07],[.09,.035,.06]].forEach(([x,r,L])=>{
+   const t=G(an,[s*x,-.15,.33-Math.abs(x)*.25]);                            // 5 jari kaki, jempol di sisi dalam
+   part(cyl(r,r*.9,L,10),SKIN,{parent:t,p:[0,0,L/2],r:[Math.PI/2,0,0],o:1.1});
+   part(sph(r*.95),SKIN,{parent:t,p:[0,0,L],o:1.1});T.push(t);});
+ // sepatu bot (bisa dilepas)
+ const b1=part(sph(1),0x3b3a20,{parent:an,p:[0,-.1,.1],s:[.28,.19,.4]}),
+       b2=part(cyl(.25,.25,.11,16),0x7a7ab8,{parent:kn,p:[0,-.21,0],o:0});shoes.push(b1,b2);
+});
+// bayangan lantai
+(()=>{const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d');
+ const r=g.createRadialGradient(64,64,4,64,64,64);r.addColorStop(0,'rgba(0,0,0,.35)');r.addColorStop(1,'rgba(0,0,0,0)');
+ g.fillStyle=r;g.fillRect(0,0,128,128);
+ const m=new THREE.Mesh(new THREE.CircleGeometry(1.5,32),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false}));
+ m.rotation.x=-Math.PI/2;m.position.y=.01;scene.add(m);})();
+
+// ---------- kontrol ----------
+const jsel=document.getElementById('jsel'),box=document.getElementById('sl');
+Object.keys(J).forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=J[k].n;jsel.appendChild(o);});
+function apply(k){const j=J[k];if(j.ph){const c=vals[k].x*R;j.ph.forEach(p=>p.g.rotation.z=-j.s*c*p.f);return;}
+ j.ax.forEach(a=>{j.g.rotation[a.k]=a.m*vals[k][a.k]*R;});}
+let sel=null;
+const marker=new THREE.Mesh(new THREE.SphereGeometry(.1,12,8),new THREE.MeshBasicMaterial({color:0xff8a00,depthTest:false}));marker.renderOrder=9;
+function sync(){box.querySelectorAll('input').forEach((i,n)=>i.value=vals[sel][J[sel].ax[n].k]);}
+function select(k){sel=k;J[k].g.add(marker);jsel.value=k;box.innerHTML='';
+ J[k].ax.forEach(a=>{const l=document.createElement('label');l.innerHTML='<span>'+a.l+'</span><input type="range" min="'+a.a+'" max="'+a.b+'" step="1" value="'+vals[k][a.k]+'">';
+  l.querySelector('input').oninput=e=>{vals[k][a.k]=+e.target.value;apply(k);};box.appendChild(l);});}
+jsel.onchange=()=>select(jsel.value);
+const PRE={'Netral':{},'Lambai':{shoulderR:{z:140},elbowR:{x:35}},'Genggam':{fingersL:{x:88},fingersR:{x:88}},'T-pose':{shoulderL:{z:90},shoulderR:{z:90}},
+ 'Melangkah':{hipL:{x:30},kneeR:{x:45},hipR:{x:-20},shoulderL:{x:-30},shoulderR:{x:30},elbowR:{x:30}}};
+function pose(p){Object.keys(vals).forEach(k=>{vals[k]=Object.assign(DEF(k),p[k]||{});apply(k);});sync();}
+document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>pose(PRE[b.dataset.p]));
+const ray=new THREE.Raycaster(),mv=new THREE.Vector2();
+function pick(e){const r=cv.getBoundingClientRect();mv.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(mv,cam);
+ for(const h of ray.intersectObject(root,true)){if(h.object===marker)continue;let o=h.object;while(o&&!(o.userData&&o.userData.joint))o=o.parent;if(o)return o.userData.joint;}return null;}
+let yaw=0,pitch=0,mode=null,lx=0,ly=0;
+cv.addEventListener('pointerdown',e=>{lx=e.clientX;ly=e.clientY;cv.setPointerCapture(e.pointerId);const k=pick(e);if(k){select(k);mode='joint';}else mode='orbit';});
+cv.addEventListener('pointerup',()=>mode=null);
+cv.addEventListener('pointermove',e=>{if(!mode)return;const dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;
+ if(mode==='orbit'){yaw+=dx*.01;pitch=clamp(pitch+dy*.005,-.4,.4);return;}
+ const j=J[sel],v=vals[sel],a0=j.ax[0],a1=j.ax[1];
+ v[a0.k]=clamp(v[a0.k]-dy*.8*a0.d,a0.a,a0.b);
+ if(a1)v[a1.k]=clamp(v[a1.k]+dx*.8*(a1.k==='z'&&j.s?j.s:1),a1.a,a1.b);
+ apply(sel);sync();});
+cv.addEventListener('wheel',e=>{e.preventDefault();dist=clamp(dist+e.deltaY*.01,6,16);},{passive:false});
+document.getElementById('reset').onclick=()=>{yaw=pitch=0;dist=10.5;};
+function size(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();}
+const showShoes=v=>{shoes.forEach(m=>m.visible=v);document.getElementById('shoe').textContent='Sepatu: '+(v?'pakai':'lepas');};
+let shoeOn=false;showShoes(false);document.getElementById('shoe').onclick=()=>{shoeOn=!shoeOn;showShoes(shoeOn);};
+addEventListener('resize',size);size();select('shoulderL');pose({});
+window.__rig={shoes,J,vals,apply,select,pick,pose,PRE,root,get sel(){return sel;}};
+(function loop(){requestAnimationFrame(loop);root.rotation.y=yaw;root.rotation.x=pitch;
+ const fit=Math.max(1,1.1/cam.aspect);cam.position.set(0,2,dist*fit);cam.lookAt(0,1.3,0);renderer.render(scene,cam);})();
+</script></body></html>
